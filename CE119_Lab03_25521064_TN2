@@ -1,0 +1,138 @@
+.data
+str1:   .asciiz "kien truc may tinh"
+str2:   .asciiz "mips"
+str3:   .asciiz ""
+str4:   .asciiz "a bc def"
+str5:   .asciiz "lenh jal ghi dia chi vao ra"
+
+tests:  .word str1, str2, str3, str4, str5
+n_test: .word 5
+bar:    .asciiz "|"
+nl:     .asciiz "\n"
+
+.text
+.globl main
+main:
+        la    $s0, tests        # $s0 = con tro mang dia chi chuoi test
+        lw    $s1, n_test       # $s1 = so luong test (5)
+        move  $s2, $zero        # $s2 = chi so i = 0
+
+main_loop:
+        beq   $s2, $s1, main_done
+        sll   $t0, $s2, 2
+        addu  $t1, $s0, $t0
+        lw    $s3, 0($t1)       # $s3 = dia chi chuoi thu i
+
+        move  $a0, $s3
+        jal   reverse_words     # dao thu tu tu tai cho
+
+        # In ket qua giua hai ky tu |
+        li    $v0, 4
+        la    $a0, bar
+        syscall
+
+        li    $v0, 4
+        move  $a0, $s3
+        syscall
+
+        li    $v0, 4
+        la    $a0, bar
+        syscall
+
+        li    $v0, 4
+        la    $a0, nl
+        syscall
+
+        addiu $s2, $s2, 1
+        j     main_loop
+
+main_done:
+        li    $v0, 10
+        syscall
+
+# strlen: dem so ky tu cua chuoi .asciiz (khong tinh byte 0)
+# Tham so  : $a0 = dia chi chuoi
+# Tra ve   : $v0 = so ky tu
+# Thanh ghi: $t0 (con tro duyet), $t1 (ky tu), $v0 (ket qua) - thu tuc la
+strlen:
+        move  $t0, $a0
+strlen_loop:
+        lbu   $t1, 0($t0)
+        beq   $t1, $zero, strlen_done
+        addiu $t0, $t0, 1
+        j     strlen_loop
+strlen_done:
+        subu  $v0, $t0, $a0
+        jr    $ra
+
+# rev_range: dao tai cho doan ky tu [$a0, $a1] (tinh ca hai dau)
+# Tham so  : $a0 = dia chi ky tu dau, $a1 = dia chi ky tu cuoi
+# Tra ve   : khong co
+# Thanh ghi: $t0, $t1 (ky tu hoan doi), $t2 (so sanh khong dau), $a0, $a1 - thu tuc la
+rev_range:
+rev_loop:
+        sltu  $t2, $a0, $a1     # so sanh dia chi khong dau: $a0 < $a1
+        beq   $t2, $zero, rev_done
+        lbu   $t0, 0($a0)
+        lbu   $t1, 0($a1)
+        sb    $t1, 0($a0)
+        sb    $t0, 0($a1)
+        addiu $a0, $a0, 1
+        addiu $a1, $a1, -1
+        j     rev_loop
+rev_done:
+        jr    $ra
+
+# reverse_words: dao thu tu cac tu trong chuoi tai cho
+# Tham so  : $a0 = dia chi chuoi
+# Tra ve   : khong co
+# Thanh ghi: $ra, $s0 (dau chuoi / dau tu), $s1 (con tro duyet) - cat vao khung 12 byte;
+#            $t0, $t1, $a0, $a1, $v0
+reverse_words:
+        addi  $sp, $sp, -12     # prologue: cap khung 3 word
+        sw    $ra, 8($sp)       # cat $ra
+        sw    $s0, 4($sp)       # cat $s0
+        sw    $s1, 0($sp)       # cat $s1
+
+        move  $s0, $a0          # luu dia chi dau chuoi
+        jal   strlen            # $v0 = do dai chuoi
+        beq   $v0, $zero, rw_done
+
+        # Buoc 1: dao toan bo chuoi
+        move  $a0, $s0
+        addu  $a1, $s0, $v0
+        addiu $a1, $a1, -1
+        jal   rev_range
+
+        # Buoc 2: dao lai tung tu
+        move  $s1, $s0          # $s1 = con tro duyet hien tai
+rw_outer:
+        lbu   $t0, 0($s1)
+        beq   $t0, $zero, rw_done
+        li    $t1, 32           # ASCII dau cach ' '
+        beq   $t0, $t1, rw_skip_space
+
+        move  $s0, $s1          # $s0 = dia chi ky tu dau tu
+rw_scan_word:
+        addiu $s1, $s1, 1
+        lbu   $t0, 0($s1)
+        beq   $t0, $zero, rw_rev_word
+        li    $t1, 32
+        bne   $t0, $t1, rw_scan_word
+
+rw_rev_word:
+        move  $a0, $s0
+        addiu $a1, $s1, -1
+        jal   rev_range
+        j     rw_outer
+
+rw_skip_space:
+        addiu $s1, $s1, 1
+        j     rw_outer
+
+rw_done:
+        lw    $s1, 0($sp)       # epilogue: khoi phuc dung offset
+        lw    $s0, 4($sp)
+        lw    $ra, 8($sp)
+        addi  $sp, $sp, 12      # thu hoi khung
+        jr    $ra
